@@ -6,4 +6,4 @@
 - [야쿠르트 무인판매기](https://www.youtube.com/watch?v=1PDjIo9LsTE)
 
 # 진행상황
-- [0814 피드백진행](/feedback/feedback.md)
+- [0814 피드백진행](/feedback/0814.md)
