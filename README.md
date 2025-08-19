@@ -1,18 +1,13 @@
 프로젝트 제목
 =============
-호객행위 무인 음료판매로봇
+무인 자율주행버스 휠체어 인식
 -------------
 ## 프로젝트 설명
- 야쿠르트 무인판매기나 다른 무인 음료판매로봇같은경우 정해진위치에서 가만히 있거나 정해진 루트안에서 이동만 하는데 
- 손님에게 적극적으로 호객행위를 하는 기능을 추가할계획
+현재 야간에 운행되는 자율주행 버스의 경우 휠체어 인식기능이 없는데, 휠체어 인식기능을 탑재해 휠체어를 인식하면 관리자없이도 경사로를 작동하도록 한다
 ## 관련제품 (링크)
-- [야쿠르트 무인판매기](https://www.youtube.com/watch?v=1PDjIo9LsTE)
+- [버스 경사로](https://kr.made-in-china.com/co_czxinder/product_Disabled-Electric-Aluminum-Wheelchair-Ramp-for-Low-Floor-Bus-with-350kg-Loading-EWR-_eghirugng.html)
 # 하드웨어
 - 웹캠
 - 데스크 탑 
-- 아두이노
-- 빵판
-- 바퀴
 # 진행상황
-- [0814 피드백진행](/feedback/0814.md)
-- [0818 피드백진행](/feedback/0818.md)
+- [0819 피드백진행](/feedback/0818.md)

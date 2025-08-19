@@ -1,16 +1,11 @@
 0813
 ========
 ## 관련제품 (링크)
-- [야쿠르트 무인판매기](https://www.youtube.com/watch?v=1PDjIo9LsTE)
+- [버스 경사로](https://kr.made-in-china.com/co_czxinder/product_Disabled-Electric-Aluminum-Wheelchair-Ramp-for-Low-Floor-Bus-with-350kg-Loading-EWR-_eghirugng.html)
 
  ## 한계점
- 판매기가 설치되어 있으나 이동 기능이 없어 손님을 불러오는 호객행위를 할수없음
+ 버스에 휠체어 인식기능이 없어 버스관리자가 휠체어를 직접인식하고 경사로를 작동해줘야함
 
  ## 개선점
-opencv mediapipedhk yolo를 통해 사람을 인식하고 동작을 인식해 상황에 맞춰 호객행위를 할수있음
+opencv mediapipe와 yolo를 통해 휠체어를 인식해 버스가 자동적으로 경사로를 작동하도록 설정
 
-0814
-=======
-## 개선점
-- 미디어파이프 인식은 확실한 동작으로 규정해 잠재손님에대한 인식보다 구매 의사가 있는 사람이 호출하기위한 수단으로 쓰는 방법도 고려.
-- 잠재손님에 대한 인식은 욜로를 통해 사람이 많이 몰려있는것을 인식해 다가가서 호객행위하는것을 고려
