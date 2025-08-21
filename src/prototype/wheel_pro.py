@@ -5,19 +5,22 @@ from inference_sdk import InferenceHTTPClient
 from concurrent.futures import ThreadPoolExecutor
 
 # ===========================
-# 1. Roboflow API 설정 (내 모델만 사용)
+# 1. Roboflow API 설정
 # ===========================
 CLIENT = InferenceHTTPClient(
     api_url="https://serverless.roboflow.com",
     api_key="3ozt88YJNcSymJj72sF5"
 )
-MODEL_ID = "wheelchair-detection-hh3io-gpvvj/1"
 
-# 🎯 탐지 대상 클래스 ID
+# 내 모델 (class_id 기반)
+MODEL_ID_1 = "wheelchair-detection-hh3io-gpvvj/1"
 TARGET_CLASSES = [0, 1, 60, 55, 92]
 
+# 타 개발자 모델 (class 이름 기반)
+MODEL_ID_2 = "wheelchair-detection-hh3io/3"
+
 # ===========================
-# 2. 이미지 리사이즈 함수
+# 2. 이미지 리사이즈
 # ===========================
 def resize_image_for_inference(image_path, max_size=640):
     img = cv2.imread(image_path)
@@ -34,7 +37,7 @@ def resize_image_for_inference(image_path, max_size=640):
         return img, image_path
 
 # ===========================
-# 3. 이미지 분석 (내 모델만 호출)
+# 3. 두 모델 모두 호출 → 하나라도 검출되면 True
 # ===========================
 def analyze_image(image_path):
     img, inference_path = resize_image_for_inference(image_path)
@@ -42,10 +45,15 @@ def analyze_image(image_path):
         print(f"[ERROR] 이미지 로딩 실패: {image_path}")
         return None
     try:
-        # 내 모델 추론 (TARGET_CLASSES 안에 있으면 검출 인정)
-        result = CLIENT.infer(inference_path, model_id=MODEL_ID)
-        pred = any(pred.get("class_id") in TARGET_CLASSES for pred in result["predictions"])
-        return pred
+        # 내 모델 (class_id 기반)
+        result1 = CLIENT.infer(inference_path, model_id=MODEL_ID_1)
+        pred1 = any(pred.get("class_id") in TARGET_CLASSES for pred in result1["predictions"])
+
+        # 타 개발자 모델 (class 이름 기반)
+        result2 = CLIENT.infer(inference_path, model_id=MODEL_ID_2)
+        pred2 = any(pred.get("class") == "wheelchair" for pred in result2["predictions"])
+
+        return pred1 or pred2
 
     except Exception as e:
         print(f"[ERROR] {image_path} -> {e}")
@@ -80,18 +88,17 @@ def preprocess_images(folder_path):
 def process_detect_folder(folder_path):
     total_images, valid_images = preprocess_images(folder_path)
     print(f"\n📁 [detect] 총 이미지 수: {total_images}")
-    print(f"✅ 유효 이미지 수 (OpenCV 로딩 성공): {len(valid_images)}")
+    print(f"✅ 유효 이미지 수: {len(valid_images)}")
 
-    no_wheelchair_images = []
+    no_detect_images = []
     with ThreadPoolExecutor(max_workers=4) as executor:
         results = executor.map(analyze_image, valid_images)
         for img_path, result in zip(valid_images, results):
             if result is False:
-                # print(f"[NO TARGET CLASS] {img_path}")
-                no_wheelchair_images.append(img_path)
+                no_detect_images.append(img_path)
 
-    print(f"✅ 유효 이미지 {len(valid_images)}개 중에 {len(no_wheelchair_images)}개 대상 클래스 미검출")
-    return no_wheelchair_images
+    print(f"✅ 유효 이미지 {len(valid_images)}개 중 {len(no_detect_images)}개 미검출")
+    return no_detect_images
 
 # ===========================
 # 6. not_detect 폴더 처리
@@ -99,19 +106,17 @@ def process_detect_folder(folder_path):
 def process_not_detect_folder(folder_path):
     total_images, valid_images = preprocess_images(folder_path)
     print(f"\n📁 [not_detect] 총 이미지 수: {total_images}")
-    print(f"✅ 유효 이미지 수 (OpenCV 로딩 성공): {len(valid_images)}")
+    print(f"✅ 유효 이미지 수: {len(valid_images)}")
 
-    target_detected_count = 0
+    detected_count = 0
     with ThreadPoolExecutor(max_workers=4) as executor:
         results = executor.map(analyze_image, valid_images)
         for img_path, result in zip(valid_images, results):
             if result is True:
-                # print(f"[TARGET CLASS DETECTED] {img_path}")
-                target_detected_count += 1
+                detected_count += 1
 
-    print(f"⚠️ 대상 클래스 검출 이미지 수: {target_detected_count}")
-    print(f"✅ 유효 이미지 {len(valid_images)}개 중에 {target_detected_count}개 대상 클래스 검출")
-    return target_detected_count
+    print(f"⚠️ 휠체어 검출 이미지 수: {detected_count}")
+    return detected_count
 
 # ===========================
 # 7. 메인 실행
