@@ -1,44 +1,127 @@
-# ============================
-# Roboflow Wheelchair Detection (class_id=0,1,60,92만 탐지)
-# ============================
-
-from inference_sdk import InferenceHTTPClient
+import os
+import glob
 import cv2
-import matplotlib.pyplot as plt
+from inference_sdk import InferenceHTTPClient
+from concurrent.futures import ThreadPoolExecutor
 
-# 1. 클라이언트 초기화
+# ===========================
+# 1. Roboflow API 설정 (내 모델만 사용)
+# ===========================
 CLIENT = InferenceHTTPClient(
     api_url="https://serverless.roboflow.com",
     api_key="3ozt88YJNcSymJj72sF5"
 )
+MODEL_ID = "wheelchair-detection-hh3io-gpvvj/1"
 
-# 2. 이미지 경로 지정
-image_path = "../../assets/wheelchair/test/images/detect/2d67hyy_jpg_4bb8703a90a5f8f9a5529ae9829bee4a.jpg"
+# 🎯 탐지 대상 클래스 ID
+TARGET_CLASSES = [0, 1, 60, 55, 92]
 
-# 3. 추론 실행
-result = CLIENT.infer(image_path, model_id="wheelchair-detection-hh3io-gpvvj/1")
-print("추론 결과:", result)
+# ===========================
+# 2. 이미지 리사이즈 함수
+# ===========================
+def resize_image_for_inference(image_path, max_size=640):
+    img = cv2.imread(image_path)
+    if img is None:
+        return None, image_path
+    h, w = img.shape[:2]
+    scale = max_size / max(h, w)
+    if scale < 1.0:
+        resized_img = cv2.resize(img, (int(w * scale), int(h * scale)))
+        temp_path = image_path + ".resized.jpg"
+        cv2.imwrite(temp_path, resized_img)
+        return resized_img, temp_path
+    else:
+        return img, image_path
 
-# 4. 결과 시각화
-image = cv2.imread(image_path)
+# ===========================
+# 3. 이미지 분석 (내 모델만 호출)
+# ===========================
+def analyze_image(image_path):
+    img, inference_path = resize_image_for_inference(image_path)
+    if img is None:
+        print(f"[ERROR] 이미지 로딩 실패: {image_path}")
+        return None
+    try:
+        # 내 모델 추론 (TARGET_CLASSES 안에 있으면 검출 인정)
+        result = CLIENT.infer(inference_path, model_id=MODEL_ID)
+        pred = any(pred.get("class_id") in TARGET_CLASSES for pred in result["predictions"])
+        return pred
 
-# 관심있는 class_id
-target_classes = [0, 1, 60, 92]
+    except Exception as e:
+        print(f"[ERROR] {image_path} -> {e}")
+        return None
 
-for pred in result['predictions']:
-    if pred.get('class_id') in target_classes:
-        x, y, w, h = int(pred['x']), int(pred['y']), int(pred['width']), int(pred['height'])
-        confidence = pred['confidence']
+# ===========================
+# 4. 이미지 전처리
+# ===========================
+def preprocess_images(folder_path):
+    image_files = glob.glob(os.path.join(folder_path, "*.*"))
+    total_images = len(image_files)
+    processed_files = []
 
-        # 바운딩 박스 그리기
-        cv2.rectangle(image, (x - w//2, y - h//2), (x + w//2, y + h//2), (0, 255, 0), 2)
+    for image_path in image_files:
+        base_dir = os.path.dirname(image_path)
+        filename = os.path.basename(image_path)
+        if ".rf." in filename:
+            new_filename = filename.replace(".rf.", "_")
+            if not new_filename.lower().endswith(".jpg"):
+                new_filename += ".jpg"
+            new_path = os.path.join(base_dir, new_filename)
+            os.rename(image_path, new_path)
+            image_path = new_path
+        processed_files.append(image_path)
 
-        # 텍스트 내용: class_id와 confidence
-        text = f"class:{pred['class_id']} ({confidence:.2f}) x:{x} y:{y} w:{w} h:{h}"
-        cv2.putText(image, text, (x - w//2, y - h//2 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    valid_images = [f for f in processed_files if cv2.imread(f) is not None]
+    return total_images, valid_images
 
-# BGR → RGB 변환 후 matplotlib으로 표시
-plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-plt.axis("off")
-plt.show()
+# ===========================
+# 5. detect 폴더 처리
+# ===========================
+def process_detect_folder(folder_path):
+    total_images, valid_images = preprocess_images(folder_path)
+    print(f"\n📁 [detect] 총 이미지 수: {total_images}")
+    print(f"✅ 유효 이미지 수 (OpenCV 로딩 성공): {len(valid_images)}")
+
+    no_wheelchair_images = []
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = executor.map(analyze_image, valid_images)
+        for img_path, result in zip(valid_images, results):
+            if result is False:
+                # print(f"[NO TARGET CLASS] {img_path}")
+                no_wheelchair_images.append(img_path)
+
+    print(f"✅ 유효 이미지 {len(valid_images)}개 중에 {len(no_wheelchair_images)}개 대상 클래스 미검출")
+    return no_wheelchair_images
+
+# ===========================
+# 6. not_detect 폴더 처리
+# ===========================
+def process_not_detect_folder(folder_path):
+    total_images, valid_images = preprocess_images(folder_path)
+    print(f"\n📁 [not_detect] 총 이미지 수: {total_images}")
+    print(f"✅ 유효 이미지 수 (OpenCV 로딩 성공): {len(valid_images)}")
+
+    target_detected_count = 0
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = executor.map(analyze_image, valid_images)
+        for img_path, result in zip(valid_images, results):
+            if result is True:
+                # print(f"[TARGET CLASS DETECTED] {img_path}")
+                target_detected_count += 1
+
+    print(f"⚠️ 대상 클래스 검출 이미지 수: {target_detected_count}")
+    print(f"✅ 유효 이미지 {len(valid_images)}개 중에 {target_detected_count}개 대상 클래스 검출")
+    return target_detected_count
+
+# ===========================
+# 7. 메인 실행
+# ===========================
+if __name__ == "__main__":
+    detect_folder = "../../assets/wheelchair/test/images/detect"
+    not_detect_folder = "../../assets/wheelchair/test/images/not_detect"
+
+    print("🔍 detect 폴더 처리 중...")
+    detect_failures = process_detect_folder(detect_folder)
+
+    print("\n🔍 not_detect 폴더 처리 중...")
+    detected_count = process_not_detect_folder(not_detect_folder)
