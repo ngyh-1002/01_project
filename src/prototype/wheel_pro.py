@@ -1,126 +1,76 @@
 import cv2
-import threading
-import queue
-from inference_sdk import InferenceHTTPClient
+from ultralytics import YOLO
+import os
 
 # =========================
-# 1. Roboflow API 설정
+# 1. YOLO 모델 로드
 # =========================
-CLIENT = InferenceHTTPClient(
-    api_url="https://serverless.roboflow.com",
-    api_key="3ozt88YJNcSymJj72sF5"
-)
-
-MODEL_ID_1 = "wheelchair-detection-hh3io-gpvvj/1"
-TARGET_CLASSES = [0, 1, 60, 55, 92]
-MODEL_ID_2 = "wheelchair-detection-hh3io/3"
+model_path = "best.pt"  # 모델 경로
+model = YOLO(model_path)
 
 # =========================
-# 2. 프레임 분석 함수
+# 2. 동영상 경로 설정
 # =========================
-def analyze_frame(frame):
-    try:
-        result1 = CLIENT.infer(frame, model_id=MODEL_ID_1)
-        pred1 = [p for p in result1["predictions"] if p.get("class_id") in TARGET_CLASSES]
+video_path = "../../assets/wheelchair/test/images/2025_08_21_16_30_mosaic_yolo.mp4"
 
-        result2 = CLIENT.infer(frame, model_id=MODEL_ID_2)
-        pred2 = [p for p in result2["predictions"] if p.get("class") == "wheelchair"]
-
-        return pred1 + pred2
-    except Exception as e:
-        print(f"[ERROR] 분석 실패: {e}")
-        return []
+# OpenCV로 동영상 읽기
+cap = cv2.VideoCapture(video_path)
+if not cap.isOpened():
+    raise FileNotFoundError(f"동영상 파일을 열 수 없습니다: {video_path}")
 
 # =========================
-# 3. 모델 분석 스레드
+# 3. 결과 저장/출력 옵션
 # =========================
-def detection_worker(frame_queue, result_queue, stop_event):
-    while not stop_event.is_set():
-        try:
-            frame = frame_queue.get(timeout=0.1)
-        except queue.Empty:
-            continue
+output_dir = "./output_frames"
+os.makedirs(output_dir, exist_ok=True)
 
-        detections = analyze_frame(frame)
-
-        # 결과 큐에 최신 결과만 유지
-        if not result_queue.empty():
-            try:
-                result_queue.get_nowait()
-            except queue.Empty:
-                pass
-        result_queue.put(detections)
+frame_count = 0
+detected_count = 0
 
 # =========================
-# 4. 비디오 실행 (실시간)
+# 4. 프레임별 탐지
 # =========================
-def run_video(video_path, resize_width=640):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print("❌ 비디오 파일 열기 실패")
-        return
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-    frame_queue = queue.Queue(maxsize=1)   # 최신 프레임 1개만 유지
-    result_queue = queue.Queue(maxsize=1)  # 최신 탐지 결과 1개만 유지
-    stop_event = threading.Event()
+    frame_count += 1
 
-    # 백그라운드 스레드 실행
-    worker = threading.Thread(target=detection_worker, args=(frame_queue, result_queue, stop_event), daemon=True)
-    worker.start()
+    # YOLO 모델로 탐지
+    results = model.predict(frame, imgsz=640, conf=0.25)  # conf는 신뢰도 threshold
 
-    last_detections = []
+    # 탐지 결과 확인
+    detected = False
+    for result in results:
+        boxes = result.boxes
+        if len(boxes) > 0:
+            detected = True
+            # 박스 그리기
+            for box, cls, conf in zip(boxes.xyxy, boxes.cls, boxes.conf):
+                x1, y1, x2, y2 = map(int, box)
+                label = f"{model.names[int(cls)]} {conf:.2f}"
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, label, (x1, y1-10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    if detected:
+        detected_count += 1
 
-        # 프레임 리사이즈
-        h, w = frame.shape[:2]
-        scale = resize_width / w
-        new_h = int(h * scale)
-        frame_resized = cv2.resize(frame, (resize_width, new_h))
+    # 화면에 프레임 표시 (옵션, 필요 없으면 주석 처리)
+    cv2.imshow("Wheelchair Detection", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-        # 최신 프레임 큐에 넣기
-        if frame_queue.full():
-            try:
-                frame_queue.get_nowait()
-            except queue.Empty:
-                pass
-        frame_queue.put(frame_resized.copy())
+    # 탐지 프레임 저장
+    if detected:
+        cv2.imwrite(os.path.join(output_dir, f"frame_{frame_count}.jpg"), frame)
 
-        # 최신 탐지 결과 가져오기
-        if not result_queue.empty():
-            last_detections = result_queue.get()
-
-        # 탐지 결과 화면에 표시
-        for det in last_detections:
-            x, y, w, h = int(det["x"]), int(det["y"]), int(det["width"]), int(det["height"])
-            x1, y1 = x - w // 2, y - h // 2
-            x2, y2 = x + w // 2, y + h // 2
-            cv2.rectangle(frame_resized, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame_resized, "Wheelchair", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-        # --- 콘솔 출력: 탐지 여부 ---
-        if last_detections:
-            print(f"[DETECTED] {len(last_detections)} wheelchair(s) detected")
-        else:
-            print("[DETECTED] None")
-
-        # 화면 출력
-        cv2.imshow("Wheelchair Detection", frame_resized)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-    # 종료 처리
-    stop_event.set()
-    cap.release()
-    cv2.destroyAllWindows()
+cap.release()
+cv2.destroyAllWindows()
 
 # =========================
-# 5. 실행
+# 5. 결과 출력
 # =========================
-if __name__ == "__main__":
-    video_file = r"../../assets/wheelchair/test/images/2025_08_21 16_30.mp4"
-    run_video(video_file)
+print(f"총 프레임 수: {frame_count}")
+print(f"휠체어가 탐지된 프레임 수: {detected_count}")
