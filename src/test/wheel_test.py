@@ -86,7 +86,7 @@ def process_detect_folder(folder_path):
                 # print(f"[NO WHEELCHAIR] {img_path}")
                 no_wheelchair_images.append(img_path)
 
-    print(f"✅ 유효 이미지 {len(valid_images)}개 중에 {len(no_wheelchair_images)}개 휠체어검출")
+    print(f"✅ 유효 이미지 {len(valid_images)}개 중에 {len(no_wheelchair_images)}개 휠체어 미검출")
     return no_wheelchair_images
 
 # ===========================
