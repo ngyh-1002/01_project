@@ -22,7 +22,7 @@ MODEL_ID_2 = "wheelchair-detection-hh3io/3"
 # ===========================
 # 2. 이미지 리사이즈
 # ===========================
-def resize_image_for_inference(image_path, max_size=640):
+def resize_image_for_inference(image_path, max_size=1024):
     img = cv2.imread(image_path)
     if img is None:
         return None, image_path
@@ -95,6 +95,7 @@ def process_detect_folder(folder_path):
         results = executor.map(analyze_image, valid_images)
         for img_path, result in zip(valid_images, results):
             if result is False:
+                # print(f"[NO WHEELCHAIR] {img_path}")
                 no_detect_images.append(img_path)
 
     print(f"✅ 유효 이미지 {len(valid_images)}개 중 {len(no_detect_images)}개 미검출")
@@ -113,6 +114,7 @@ def process_not_detect_folder(folder_path):
         results = executor.map(analyze_image, valid_images)
         for img_path, result in zip(valid_images, results):
             if result is True:
+                # print(f"[NO WHEELCHAIR] {img_path}")
                 detected_count += 1
 
     print(f"⚠️ 휠체어 검출 이미지 수: {detected_count}")
