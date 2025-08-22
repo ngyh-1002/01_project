@@ -52,9 +52,6 @@
   * [cite\_start]**휠체어 탐지 및 교차 비율 계산**: '휠체어 로이'가 '버스 대기 로이'와 겹치는 비율을 계산합니다[cite: 256].
   * [cite\_start]**슬로프 자동 작동**: 교차 비율이 30%를 초과하면 휠체어가 탑승하려는 것으로 판단, 슬로프를 자동으로 하강시키는 신호를 보냅니다[cite: 258]. [cite\_start]이 로직은 불필요한 슬로프 작동을 방지하고 시스템 효율성을 높입니다[cite: 259].
 
-## 4.4 시연영상
-<img width="940" height="529" alt="image" src="https://github.com/user-attachments/assets/951e0d4b-7ec6-432f-81b0-64815db578f8" />
-
 
 ## 5\. Python 모듈 설치
 
